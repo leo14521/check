@@ -1,0 +1,450 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>다이내믹 체중 관리 대시보드 (5월 30일 목표)</title>
+    <style>
+      body {
+        font-family: "Pretendard", "Malgun Gothic", sans-serif;
+        background-color: #f8f9fa;
+        color: #333;
+        margin: 0;
+        padding: 20px;
+      }
+      .container {
+        max-width: 1100px;
+        margin: 0 auto;
+      }
+      h1,
+      h2 {
+        text-align: center;
+        color: #2c3e50;
+      }
+      .card {
+        background: #fff;
+        padding: 25px;
+        border-radius: 12px;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+        margin-bottom: 20px;
+      }
+      .input-group {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 15px;
+        margin-bottom: 15px;
+      }
+      .input-item {
+        flex: 1;
+        min-width: 150px;
+      }
+      label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: bold;
+        font-size: 0.9em;
+        color: #555;
+      }
+      input[type="number"],
+      select {
+        width: 100%;
+        padding: 12px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        box-sizing: border-box;
+        font-size: 1em;
+      }
+      button.primary-btn {
+        width: 100%;
+        padding: 15px;
+        background-color: #27ae60;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-size: 1.1em;
+        font-weight: bold;
+        cursor: pointer;
+        transition: background-color 0.3s;
+      }
+      button.primary-btn:hover {
+        background-color: #219653;
+      }
+      .result-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 15px;
+        margin-top: 20px;
+      }
+      .result-box {
+        background: #f1f8f5;
+        padding: 20px;
+        border-radius: 10px;
+        text-align: center;
+      }
+      .result-box.highlight {
+        background: #e8f5e9;
+        border: 2px solid #a5d6a7;
+      }
+      .result-box h3 {
+        margin: 0 0 10px 0;
+        font-size: 0.95em;
+        color: #666;
+      }
+      .result-box p {
+        margin: 0;
+        font-size: 1.5em;
+        font-weight: bold;
+        color: #2c3e50;
+      }
+      .result-box.highlight p {
+        color: #27ae60;
+        font-size: 1.8em;
+      }
+
+      /* 테이블 스타일링 */
+      .table-container {
+        overflow-x: auto;
+        max-height: 600px; /* 행이 많아지므로 스크롤 추가 */
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 20px;
+        font-size: 0.95em;
+        min-width: 900px;
+      }
+      /* 테이블 헤더 고정 */
+      thead th {
+        position: sticky;
+        top: 0;
+        background-color: #f8f9fa;
+        z-index: 1;
+        box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.1);
+      }
+      th,
+      td {
+        padding: 12px 10px;
+        text-align: center;
+        border-bottom: 1px solid #eee;
+        vertical-align: middle;
+      }
+      th {
+        color: #555;
+        font-weight: bold;
+      }
+      tr:hover {
+        background-color: #fafafa;
+      }
+      .status-select {
+        padding: 6px;
+        border-radius: 6px;
+        border: 1px solid #ccc;
+        background-color: #fff;
+        cursor: pointer;
+        font-weight: bold;
+      }
+      .table-input {
+        width: 70px;
+        padding: 6px;
+        text-align: center;
+        border: 1px solid #aaa;
+        border-radius: 6px;
+        background-color: #fffacd;
+        font-weight: bold;
+      }
+      .table-input:focus {
+        background-color: #fff;
+        outline: 2px solid #3498db;
+      }
+      .deficit-positive {
+        color: #27ae60;
+        font-weight: bold;
+      }
+      .deficit-negative {
+        color: #e74c3c;
+        font-weight: bold;
+      }
+      .goal-text {
+        color: #27ae60;
+        font-weight: bold;
+      }
+      .exercise-text {
+        color: #555;
+      }
+      .empty-dash {
+        color: #ccc;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>📈 다이내믹 체중 관리 대시보드</h1>
+
+      <div class="card">
+        <h2>나의 신체 정보</h2>
+        <div class="input-group">
+          <div class="input-item">
+            <label>키 (cm)</label>
+            <input type="number" id="height" value="177" />
+          </div>
+          <div class="input-item">
+            <label>현재 몸무게 (kg)</label>
+            <input type="number" id="weight" value="88" />
+          </div>
+          <div class="input-item">
+            <label>만 나이</label>
+            <input type="number" id="age" value="34" />
+          </div>
+        </div>
+        <div class="input-group">
+          <div class="input-item">
+            <label>성별</label>
+            <select id="gender">
+              <option value="male">남성</option>
+              <option value="female">여성</option>
+            </select>
+          </div>
+          <div class="input-item">
+            <label>평소 활동량</label>
+            <select id="activity">
+              <option value="1.2">거의 운동하지 않음</option>
+              <option value="1.375" selected>가벼운 활동 (주 1~3일)</option>
+              <option value="1.55">보통 활동 (주 3~5일)</option>
+              <option value="1.725">적극적 활동 (매일)</option>
+            </select>
+          </div>
+        </div>
+        <button class="primary-btn" onclick="initializeDashboard()">
+          분석 및 일정표 생성하기
+        </button>
+      </div>
+
+      <div class="card" id="result-card" style="display: none">
+        <h2>📊 신체 데이터 요약</h2>
+        <div class="result-grid">
+          <div class="result-box">
+            <h3>유지 칼로리 (TDEE)</h3>
+            <p id="res-tdee">-</p>
+          </div>
+          <div class="result-box">
+            <h3>하루 목표 섭취량</h3>
+            <p id="res-target">-</p>
+          </div>
+          <div class="result-box highlight">
+            <h3>🔥 5/30 예상 체중</h3>
+            <p id="res-final-weight">- kg</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" id="schedule-card" style="display: none">
+        <h2>📅 실전 기록장 (3.9 ~ 5.30)</h2>
+        <p
+          style="
+            text-align: center;
+            color: #7f8c8d;
+            font-size: 0.9em;
+            margin-bottom: 20px;
+          ">
+          ※ 일정을 못 지켰다면 '❌ 못 지킴'을 선택하고 실제 수치를 입력해보세요.
+          남은 예상 체중이 즉시 재계산됩니다.<br />
+          (스크롤을 내려 전체 일정을 확인할 수 있습니다)
+        </p>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>날짜</th>
+                <th>남은 일수</th>
+                <th>목표 섭취량</th>
+                <th>권장 운동 소모량</th>
+                <th>달성 여부</th>
+                <th>실제 섭취(kcal)</th>
+                <th>실제 운동(kcal)</th>
+                <th>일일 마진</th>
+                <th>예상 누적 체중</th>
+              </tr>
+            </thead>
+            <tbody id="schedule-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      let scheduleData = [];
+      let startWeight = 0;
+      let baseTDEE = 0;
+
+      function initializeDashboard() {
+        const h = parseFloat(document.getElementById("height").value);
+        startWeight = parseFloat(document.getElementById("weight").value);
+        const a = parseInt(document.getElementById("age").value);
+        const gender = document.getElementById("gender").value;
+        const activity = parseFloat(document.getElementById("activity").value);
+
+        if (!h || !startWeight || !a)
+          return alert("모든 값을 정확히 입력하세요.");
+
+        // 기초대사량(BMR) 및 활동대사량(TDEE)
+        let bmr =
+          gender === "male"
+            ? 10 * startWeight + 6.25 * h - 5 * a + 5
+            : 10 * startWeight + 6.25 * h - 5 * a - 161;
+        bmr = Math.round(bmr);
+        baseTDEE = Math.round(bmr * activity);
+
+        // 현실적 목표 설정 (10kg 감량을 80여일만에 하려면 약간 강도 높은 다이어트 필요, 적자폭 600~800)
+        let plannedIntake = baseTDEE - 600;
+        if (plannedIntake < bmr) plannedIntake = bmr; // 기초대사량은 가급적 지키도록 세팅
+        let plannedExercise = 300;
+
+        document.getElementById("res-tdee").innerText =
+          baseTDEE.toLocaleString() + " kcal";
+        document.getElementById("res-target").innerText =
+          plannedIntake.toLocaleString() + " kcal";
+
+        document.getElementById("result-card").style.display = "block";
+        document.getElementById("schedule-card").style.display = "block";
+
+        // 3/9 ~ 5/30 배열 초기화
+        scheduleData = [];
+        const startDate = new Date(2026, 2, 9); // 3월 9일 (Month는 0부터 시작하므로 2=3월)
+        const endDate = new Date(2026, 4, 30); // 5월 30일 (4=5월)
+        let current = new Date(startDate);
+
+        while (current <= endDate) {
+          let daysLeft = Math.round(
+            (endDate - current) / (1000 * 60 * 60 * 24),
+          );
+          scheduleData.push({
+            dateStr: `${current.getMonth() + 1}월 ${current.getDate()}일`,
+            daysLeft: `D-${daysLeft}`,
+            plannedIntake: plannedIntake,
+            plannedExercise: plannedExercise,
+            status: "none", // 'none', 'success', 'fail'
+            actualIntake: null,
+            actualExercise: null,
+          });
+          current.setDate(current.getDate() + 1);
+        }
+
+        renderTable();
+      }
+
+      // 초기 테이블 뼈대 그리기
+      function renderTable() {
+        const tbody = document.getElementById("schedule-body");
+        tbody.innerHTML = "";
+
+        scheduleData.forEach((day, index) => {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+                <td>${day.dateStr}</td>
+                <td>${day.daysLeft}</td>
+                <td class="goal-text">${day.plannedIntake.toLocaleString()} kcal</td>
+                <td class="exercise-text">+ ${day.plannedExercise} kcal</td>
+                <td>
+                    <select class="status-select" onchange="updateStatus(${index}, this.value)">
+                        <option value="none">➖ 대기중</option>
+                        <option value="success">✅ 지킴</option>
+                        <option value="fail">❌ 못 지킴(수정)</option>
+                    </select>
+                </td>
+                <td id="td-intake-${index}"></td>
+                <td id="td-exercise-${index}"></td>
+                <td id="margin-${index}">-</td>
+                <td id="weight-${index}" style="font-weight:bold; color:#2c3e50;">-</td>
+            `;
+          tbody.appendChild(tr);
+          updateRowUI(index);
+        });
+        calculateProjections();
+      }
+
+      // 상태 변경 (지킴/못지킴) 시 해당 행의 UI만 변경
+      function updateStatus(index, val) {
+        scheduleData[index].status = val;
+        updateRowUI(index);
+        calculateProjections();
+      }
+
+      // 해당 줄의 입력칸을 보여줄지 말지 결정
+      function updateRowUI(index) {
+        const day = scheduleData[index];
+        const tdIntake = document.getElementById(`td-intake-${index}`);
+        const tdExercise = document.getElementById(`td-exercise-${index}`);
+
+        if (day.status === "success") {
+          tdIntake.innerHTML = `<span style="color:#7f8c8d;">${day.plannedIntake}</span>`;
+          tdExercise.innerHTML = `<span style="color:#7f8c8d;">${day.plannedExercise}</span>`;
+          day.actualIntake = day.plannedIntake;
+          day.actualExercise = day.plannedExercise;
+        } else if (day.status === "fail") {
+          tdIntake.innerHTML = `<input type="number" class="table-input" placeholder="${day.plannedIntake}" value="${day.actualIntake || ""}" oninput="updateData(${index}, 'actualIntake', this.value)">`;
+          tdExercise.innerHTML = `<input type="number" class="table-input" placeholder="${day.plannedExercise}" value="${day.actualExercise || ""}" oninput="updateData(${index}, 'actualExercise', this.value)">`;
+        } else {
+          tdIntake.innerHTML = `<span class="empty-dash">-</span>`;
+          tdExercise.innerHTML = `<span class="empty-dash">-</span>`;
+          day.actualIntake = null;
+          day.actualExercise = null;
+        }
+      }
+
+      // 사용자가 실패 창에 숫자를 적을 때 배열 데이터 업데이트
+      function updateData(index, field, value) {
+        scheduleData[index][field] = value;
+        calculateProjections();
+      }
+
+      // 핵심: 도미노 체중 계산 로직
+      function calculateProjections() {
+        let currentW = startWeight;
+
+        scheduleData.forEach((day, index) => {
+          let intake = day.plannedIntake;
+          let exercise = day.plannedExercise;
+
+          if (day.status === "success") {
+            intake = day.plannedIntake;
+            exercise = day.plannedExercise;
+          } else if (day.status === "fail") {
+            intake =
+              day.actualIntake !== null && day.actualIntake !== ""
+                ? parseInt(day.actualIntake)
+                : day.plannedIntake;
+            exercise =
+              day.actualExercise !== null && day.actualExercise !== ""
+                ? parseInt(day.actualExercise)
+                : day.plannedExercise;
+          } else {
+            intake = day.plannedIntake;
+            exercise = day.plannedExercise;
+          }
+
+          let totalBurn = baseTDEE + exercise;
+          let dailyMargin = totalBurn - intake;
+          let weightChange = dailyMargin / 7700;
+          currentW -= weightChange;
+
+          // 해당 줄 데이터 화면에 뿌려주기
+          const marginTd = document.getElementById(`margin-${index}`);
+          if (dailyMargin > 0) {
+            marginTd.innerHTML = `<span class="deficit-positive">-${dailyMargin} kcal</span>`;
+          } else if (dailyMargin < 0) {
+            marginTd.innerHTML = `<span class="deficit-negative">+${Math.abs(dailyMargin)} kcal</span>`;
+          } else {
+            marginTd.innerText = "0 kcal";
+          }
+
+          document.getElementById(`weight-${index}`).innerText =
+            currentW.toFixed(2) + " kg";
+        });
+
+        // 대시보드 상단 요약에 최종 몸무게 업데이트
+        document.getElementById("res-final-weight").innerText =
+          currentW.toFixed(2) + " kg";
+      }
+    </script>
+  </body>
+</html>
