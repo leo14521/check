@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>대시보드</title>
+    <title>관리대시보드</title>
     <style>
       body {
         font-family: "Pretendard", "Malgun Gothic", sans-serif;
@@ -151,6 +151,21 @@
       tr:hover {
         background-color: #fafafa;
       }
+      .cheat-day-row {
+        background-color: #fff3cd;
+      }
+      .cheat-day-row:hover {
+        background-color: #ffeeba;
+      }
+      .cheat-badge {
+        background-color: #ff9f43;
+        color: white;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 0.75em;
+        margin-left: 5px;
+        font-weight: bold;
+      }
       .status-select {
         padding: 6px;
         border-radius: 6px;
@@ -199,7 +214,7 @@
   </head>
   <body>
     <div class="container">
-      <h1>📈 관리 대시보드</h1>
+      <h1>📈 관리대시보드</h1>
 
       <div class="card">
         <h2>설정 및 정보</h2>
@@ -234,6 +249,19 @@
               <option value="1.725">적극적 활동 (매일)</option>
             </select>
           </div>
+          <div class="input-item">
+            <label>🍕 치팅데이 (주 1회 3000kcal)</label>
+            <select id="cheat-day">
+              <option value="none">설정 안 함</option>
+              <option value="0" selected>일요일</option>
+              <option value="1">월요일</option>
+              <option value="2">화요일</option>
+              <option value="3">수요일</option>
+              <option value="4">목요일</option>
+              <option value="5">금요일</option>
+              <option value="6">토요일</option>
+            </select>
+          </div>
         </div>
         <div
           class="input-group"
@@ -266,8 +294,18 @@
             </div>
           </div>
           <div class="result-box" id="intake-box">
-            <h3>하루 목표 섭취량</h3>
+            <h3>일반일 목표 섭취량</h3>
             <p id="res-target">-</p>
+            <div
+              id="res-cheat-info"
+              style="
+                font-size: 0.8em;
+                color: #ff9f43;
+                margin-top: 5px;
+                font-weight: bold;
+              ">
+              치팅데이 설정 없음
+            </div>
             <div id="res-warning" class="warning-text"></div>
           </div>
           <div class="result-box highlight">
@@ -280,14 +318,14 @@
       <div class="card" id="schedule-card" style="display: none">
         <h2>📅 실전 기록장 (오차 추적)</h2>
         <p
+          id="table-desc"
           style="
             text-align: center;
             color: #7f8c8d;
             font-size: 0.9em;
             margin-bottom: 20px;
           ">
-          ※ 목표 체중/날짜를 바꾸면 그에 맞춰 남은 기간의 하루 섭취 계획이
-          실시간으로 재계산됩니다!
+          ※ 목표 체중/날짜를 바꾸면 실시간으로 재계산됩니다!
         </p>
         <div class="table-container">
           <table>
@@ -318,12 +356,22 @@
       let baseTDEE = 0;
       let savedRecords = {};
 
+      const weekNames = [
+        "일요일",
+        "월요일",
+        "화요일",
+        "수요일",
+        "목요일",
+        "금요일",
+        "토요일",
+      ];
+
       window.onload = function () {
         loadFromLocalStorage();
       };
 
       function loadFromLocalStorage() {
-        const data = localStorage.getItem("dietProData_v2");
+        const data = localStorage.getItem("dietProData_v4");
         if (data) {
           const parsed = JSON.parse(data);
           if (parsed.info) {
@@ -336,6 +384,8 @@
               parsed.info.targetDate;
             document.getElementById("target-weight").value =
               parsed.info.targetWeight || "";
+            if (parsed.info.cheatDay)
+              document.getElementById("cheat-day").value = parsed.info.cheatDay;
           }
           savedRecords = parsed.records || {};
           generateSchedule();
@@ -351,14 +401,15 @@
           activity: document.getElementById("activity").value,
           targetDate: document.getElementById("target-date").value,
           targetWeight: document.getElementById("target-weight").value,
+          cheatDay: document.getElementById("cheat-day").value,
         };
         const dataToSave = { info: info, records: savedRecords };
-        localStorage.setItem("dietProData_v2", JSON.stringify(dataToSave));
+        localStorage.setItem("dietProData_v4", JSON.stringify(dataToSave));
       }
 
       function clearData() {
         if (confirm("정말 모든 기록을 삭제하시겠습니까? 복구할 수 없습니다.")) {
-          localStorage.removeItem("dietProData_v2");
+          localStorage.removeItem("dietProData_v4");
           location.reload();
         }
       }
@@ -373,6 +424,7 @@
         const targetWeight = parseFloat(
           document.getElementById("target-weight").value,
         );
+        const cheatDayValue = document.getElementById("cheat-day").value;
 
         if (!h || !startWeight || !a || !targetDateStr || !targetWeight)
           return alert("모든 값을 정확히 입력하세요.");
@@ -385,7 +437,6 @@
         bmr = Math.round(bmr);
         baseTDEE = Math.round(bmr * activity);
 
-        // 기간 계산 (고정 시작일: 3월 9일)
         const startDate = new Date(2026, 2, 9);
         const endDate = new Date(targetDateStr);
         let totalDays = Math.round(
@@ -395,25 +446,41 @@
         if (totalDays <= 0)
           return alert("목표 날짜는 시작일(3월 9일) 이후여야 합니다.");
 
-        // 핵심: 칼로리 역산 로직
-        // 1. 빼야 할 총 몸무게 = 시작 몸무게 - 목표 체중
+        // 1. 역산 로직
         let weightToLose = startWeight - targetWeight;
-        // 2. 태워야 할 총 칼로리 = 지방 1kg당 7700kcal
         let totalCalorieDeficit = weightToLose * 7700;
-        // 3. 하루에 내야 하는 적자(마진) 칼로리
-        let requiredDailyDeficit = Math.round(totalCalorieDeficit / totalDays);
-
-        // 4. 권장 추가 운동량 300kcal 고정 가정
+        let requiredDailyDeficit = totalCalorieDeficit / totalDays;
         let plannedExercise = 300;
 
-        // 5. 역산된 목표 섭취량 = (유지칼로리 + 추가운동) - 하루필요적자
-        let plannedIntake = baseTDEE + plannedExercise - requiredDailyDeficit;
+        // 2. 평균 목표 섭취량 계산
+        let avgPlannedIntake =
+          baseTDEE + plannedExercise - requiredDailyDeficit;
 
-        // 경고 로직 (건강 체크)
+        // 3. 치팅데이 로직 반영
+        let hasCheatDay = cheatDayValue !== "none";
+        let cheatDayIndex = hasCheatDay ? parseInt(cheatDayValue) : -1;
+        let normalDayIntake;
+
+        if (hasCheatDay) {
+          normalDayIntake = Math.round((7 * avgPlannedIntake - 3000) / 6);
+          document.getElementById("res-cheat-info").innerText =
+            `치팅데이(${weekNames[cheatDayIndex]}): 3,000 kcal 배정 완료`;
+          document.getElementById("table-desc").innerText =
+            `※ 매주 ${weekNames[cheatDayIndex]}은 3,000kcal 치팅데이로 자동 반영되어 있습니다.`;
+        } else {
+          normalDayIntake = Math.round(avgPlannedIntake);
+          document.getElementById("res-cheat-info").innerText =
+            `치팅데이 설정 안 함`;
+          document.getElementById("res-cheat-info").style.color = `#7f8c8d`;
+          document.getElementById("table-desc").innerText =
+            `※ 치팅데이 없이 매일 일정한 칼로리로 계산됩니다.`;
+        }
+
+        // 경고 로직
         const warningEl = document.getElementById("res-warning");
-        if (plannedIntake < bmr && plannedIntake > 0) {
-          warningEl.innerText = `⚠️ 주의: 기초대사량(${bmr}kcal)보다 적습니다. 목표를 길게 잡거나 목표 체중을 올리세요!`;
-        } else if (plannedIntake <= 0) {
+        if (normalDayIntake < bmr && normalDayIntake > 0) {
+          warningEl.innerText = `⚠️ 주의: 평일 섭취량이 기초대사량(${bmr}kcal)보다 적어집니다. 목표 체중을 올리거나 치팅을 없애보세요!`;
+        } else if (normalDayIntake <= 0) {
           warningEl.innerText = `🚨 불가능: 기간 내 달성하려면 굶어도 모자랍니다. 일정을 수정하세요!`;
         } else {
           warningEl.innerText = `✅ 건강하게 감량 가능한 페이스입니다.`;
@@ -424,7 +491,7 @@
           baseTDEE.toLocaleString() + " kcal";
         document.getElementById("res-bmr").innerText = bmr.toLocaleString();
         document.getElementById("res-target").innerText =
-          plannedIntake.toLocaleString() + " kcal";
+          normalDayIntake.toLocaleString() + " kcal";
 
         document.getElementById("result-card").style.display = "block";
         document.getElementById("schedule-card").style.display = "block";
@@ -445,11 +512,16 @@
             actualWeight: null,
           };
 
+          // 치팅데이 여부 확인
+          let isCheatDay = hasCheatDay && current.getDay() === cheatDayIndex;
+          let todayTargetIntake = isCheatDay ? 3000 : normalDayIntake;
+
           scheduleData.push({
             key: keyDate,
             dateStr: `${current.getMonth() + 1}/${current.getDate()}`,
             daysLeft: `D-${daysLeft}`,
-            plannedIntake: plannedIntake, // 역산된 섭취량 적용
+            isCheatDay: isCheatDay,
+            plannedIntake: todayTargetIntake,
             plannedExercise: plannedExercise,
             status: record.status,
             actualIntake: record.actualIntake,
@@ -470,6 +542,8 @@
         scheduleData.forEach((day, index) => {
           const tr = document.createElement("tr");
 
+          if (day.isCheatDay) tr.className = "cheat-day-row";
+
           let statusSelect = `
                 <select class="status-select" onchange="updateStatus(${index}, this.value)">
                     <option value="none" ${day.status === "none" ? "selected" : ""}>➖ 대기중</option>
@@ -478,10 +552,14 @@
                 </select>
             `;
 
+          let dateHtml = day.dateStr;
+          if (day.isCheatDay)
+            dateHtml += `<br><span class="cheat-badge">치팅</span>`;
+
           tr.innerHTML = `
-                <td>${day.dateStr}</td>
+                <td>${dateHtml}</td>
                 <td style="color:#aaa; font-size:0.9em;">${day.daysLeft}</td>
-                <td class="goal-text">${day.plannedIntake}</td>
+                <td class="goal-text" style="${day.isCheatDay ? "color:#d35400;" : ""}">${day.plannedIntake}</td>
                 <td style="color:#7f8c8d;">+${day.plannedExercise}</td>
                 <td>${statusSelect}</td>
                 <td id="td-intake-${index}"></td>
@@ -591,11 +669,10 @@
             let actual = parseFloat(day.actualWeight);
             let diff = actual - currentW;
 
-            if (diff > 0) {
+            if (diff > 0)
               errorTd.innerHTML = `<span class="error-bad">+${diff.toFixed(2)}kg</span>`;
-            } else {
+            else
               errorTd.innerHTML = `<span class="error-good">${diff.toFixed(2)}kg</span>`;
-            }
           } else {
             errorTd.innerText = "-";
           }
