@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>다이내믹 체중 관리 대시보드 (5월 30일 목표)</title>
+    <title>관리 대시보드</title>
     <style>
       body {
         font-family: "Pretendard", "Malgun Gothic", sans-serif;
@@ -13,7 +13,7 @@
         padding: 20px;
       }
       .container {
-        max-width: 1100px;
+        max-width: 1200px; /* 테이블이 넓어져서 폭을 조금 더 키웠습니다 */
         margin: 0 auto;
       }
       h1,
@@ -46,6 +46,7 @@
         color: #555;
       }
       input[type="number"],
+      input[type="date"],
       select {
         width: 100%;
         padding: 12px;
@@ -68,6 +69,13 @@
       }
       button.primary-btn:hover {
         background-color: #219653;
+      }
+      button.reset-btn {
+        background-color: #e74c3c;
+        margin-top: 10px;
+      }
+      button.reset-btn:hover {
+        background-color: #c0392b;
       }
       .result-grid {
         display: grid;
@@ -104,16 +112,15 @@
       /* 테이블 스타일링 */
       .table-container {
         overflow-x: auto;
-        max-height: 600px; /* 행이 많아지므로 스크롤 추가 */
+        max-height: 600px;
       }
       table {
         width: 100%;
         border-collapse: collapse;
         margin-top: 20px;
-        font-size: 0.95em;
-        min-width: 900px;
+        font-size: 0.9em;
+        min-width: 1000px;
       }
-      /* 테이블 헤더 고정 */
       thead th {
         position: sticky;
         top: 0;
@@ -123,7 +130,7 @@
       }
       th,
       td {
-        padding: 12px 10px;
+        padding: 10px 8px;
         text-align: center;
         border-bottom: 1px solid #eee;
         vertical-align: middle;
@@ -144,13 +151,16 @@
         font-weight: bold;
       }
       .table-input {
-        width: 70px;
+        width: 65px;
         padding: 6px;
         text-align: center;
         border: 1px solid #aaa;
         border-radius: 6px;
         background-color: #fffacd;
         font-weight: bold;
+      }
+      .weight-input {
+        background-color: #e8f4f8; /* 몸무게 입력칸은 파란색 톤으로 구분 */
       }
       .table-input:focus {
         background-color: #fff;
@@ -168,27 +178,29 @@
         color: #27ae60;
         font-weight: bold;
       }
-      .exercise-text {
-        color: #555;
-      }
-      .empty-dash {
-        color: #ccc;
-      }
+      .error-good {
+        color: #3498db;
+        font-weight: bold;
+      } /* 예상보다 더 빠짐 */
+      .error-bad {
+        color: #e74c3c;
+        font-weight: bold;
+      } /* 예상보다 덜 빠짐 */
     </style>
   </head>
   <body>
     <div class="container">
-      <h1>📈 다이내믹 체중 관리 대시보드</h1>
+      <h1>📈 다이내믹 체중 관리 PRO</h1>
 
       <div class="card">
-        <h2>나의 신체 정보</h2>
+        <h2>설정 및 정보</h2>
         <div class="input-group">
           <div class="input-item">
             <label>키 (cm)</label>
             <input type="number" id="height" value="177" />
           </div>
           <div class="input-item">
-            <label>현재 몸무게 (kg)</label>
+            <label>시작 몸무게 (kg)</label>
             <input type="number" id="weight" value="88" />
           </div>
           <div class="input-item">
@@ -213,14 +225,21 @@
               <option value="1.725">적극적 활동 (매일)</option>
             </select>
           </div>
+          <div class="input-item">
+            <label>🎯 목표 날짜 (자유 변경)</label>
+            <input type="date" id="target-date" value="2026-05-30" />
+          </div>
         </div>
-        <button class="primary-btn" onclick="initializeDashboard()">
-          분석 및 일정표 생성하기
+        <button class="primary-btn" onclick="generateSchedule()">
+          일정표 생성 / 업데이트
+        </button>
+        <button class="primary-btn reset-btn" onclick="clearData()">
+          기록 전체 초기화
         </button>
       </div>
 
       <div class="card" id="result-card" style="display: none">
-        <h2>📊 신체 데이터 요약</h2>
+        <h2>📊 데이터 요약</h2>
         <div class="result-grid">
           <div class="result-box">
             <h3>유지 칼로리 (TDEE)</h3>
@@ -231,14 +250,14 @@
             <p id="res-target">-</p>
           </div>
           <div class="result-box highlight">
-            <h3>🔥 5/30 예상 체중</h3>
+            <h3>🔥 목표일 예상 체중</h3>
             <p id="res-final-weight">- kg</p>
           </div>
         </div>
       </div>
 
       <div class="card" id="schedule-card" style="display: none">
-        <h2>📅 실전 기록장 (3.9 ~ 5.30)</h2>
+        <h2>📅 실전 기록장 (오차 추적)</h2>
         <p
           style="
             text-align: center;
@@ -246,9 +265,8 @@
             font-size: 0.9em;
             margin-bottom: 20px;
           ">
-          ※ 일정을 못 지켰다면 '❌ 못 지킴'을 선택하고 실제 수치를 입력해보세요.
-          남은 예상 체중이 즉시 재계산됩니다.<br />
-          (스크롤을 내려 전체 일정을 확인할 수 있습니다)
+          ※ 목표 날짜를 바꿔도 기존에 입력한 데이터는 날아가지 않습니다. 자동
+          저장됩니다!
         </p>
         <div class="table-container">
           <table>
@@ -257,12 +275,14 @@
                 <th>날짜</th>
                 <th>남은 일수</th>
                 <th>목표 섭취량</th>
-                <th>권장 운동 소모량</th>
+                <th>권장 운동</th>
                 <th>달성 여부</th>
-                <th>실제 섭취(kcal)</th>
-                <th>실제 운동(kcal)</th>
+                <th>실제 섭취</th>
+                <th>실제 운동</th>
                 <th>일일 마진</th>
-                <th>예상 누적 체중</th>
+                <th>예상 체중</th>
+                <th style="background-color: #e8f4f8">실제 체중</th>
+                <th>오차</th>
               </tr>
             </thead>
             <tbody id="schedule-body"></tbody>
@@ -275,18 +295,69 @@
       let scheduleData = [];
       let startWeight = 0;
       let baseTDEE = 0;
+      let savedRecords = {}; // 로컬스토리지 저장용 객체
 
-      function initializeDashboard() {
+      // 페이지 로드 시 기존 데이터 불러오기
+      window.onload = function () {
+        loadFromLocalStorage();
+      };
+
+      function loadFromLocalStorage() {
+        const data = localStorage.getItem("dietProData");
+        if (data) {
+          const parsed = JSON.parse(data);
+          // 기본 정보 세팅
+          if (parsed.info) {
+            document.getElementById("height").value = parsed.info.height;
+            document.getElementById("weight").value = parsed.info.weight;
+            document.getElementById("age").value = parsed.info.age;
+            document.getElementById("gender").value = parsed.info.gender;
+            document.getElementById("activity").value = parsed.info.activity;
+            document.getElementById("target-date").value =
+              parsed.info.targetDate;
+          }
+          // 날짜별 기록 세팅
+          savedRecords = parsed.records || {};
+          // 자동으로 표 생성
+          generateSchedule();
+        }
+      }
+
+      function saveToLocalStorage() {
+        const info = {
+          height: document.getElementById("height").value,
+          weight: document.getElementById("weight").value,
+          age: document.getElementById("age").value,
+          gender: document.getElementById("gender").value,
+          activity: document.getElementById("activity").value,
+          targetDate: document.getElementById("target-date").value,
+        };
+        const dataToSave = {
+          info: info,
+          records: savedRecords,
+        };
+        localStorage.setItem("dietProData", JSON.stringify(dataToSave));
+      }
+
+      function clearData() {
+        if (confirm("정말 모든 기록을 삭제하시겠습니까? 복구할 수 없습니다.")) {
+          localStorage.removeItem("dietProData");
+          location.reload();
+        }
+      }
+
+      function generateSchedule() {
         const h = parseFloat(document.getElementById("height").value);
         startWeight = parseFloat(document.getElementById("weight").value);
         const a = parseInt(document.getElementById("age").value);
         const gender = document.getElementById("gender").value;
         const activity = parseFloat(document.getElementById("activity").value);
+        const targetDateStr = document.getElementById("target-date").value;
 
-        if (!h || !startWeight || !a)
+        if (!h || !startWeight || !a || !targetDateStr)
           return alert("모든 값을 정확히 입력하세요.");
 
-        // 기초대사량(BMR) 및 활동대사량(TDEE)
+        // 기초/활동 대사량
         let bmr =
           gender === "male"
             ? 10 * startWeight + 6.25 * h - 5 * a + 5
@@ -294,9 +365,8 @@
         bmr = Math.round(bmr);
         baseTDEE = Math.round(bmr * activity);
 
-        // 현실적 목표 설정 (10kg 감량을 80여일만에 하려면 약간 강도 높은 다이어트 필요, 적자폭 600~800)
         let plannedIntake = baseTDEE - 600;
-        if (plannedIntake < bmr) plannedIntake = bmr; // 기초대사량은 가급적 지키도록 세팅
+        if (plannedIntake < bmr) plannedIntake = bmr;
         let plannedExercise = 300;
 
         document.getElementById("res-tdee").innerText =
@@ -307,54 +377,77 @@
         document.getElementById("result-card").style.display = "block";
         document.getElementById("schedule-card").style.display = "block";
 
-        // 3/9 ~ 5/30 배열 초기화
         scheduleData = [];
-        const startDate = new Date(2026, 2, 9); // 3월 9일 (Month는 0부터 시작하므로 2=3월)
-        const endDate = new Date(2026, 4, 30); // 5월 30일 (4=5월)
+        const startDate = new Date(2026, 2, 9); // 고정 시작일: 3월 9일
+        const endDate = new Date(targetDateStr);
+
+        if (endDate < startDate)
+          return alert("목표 날짜는 시작일(3월 9일) 이후여야 합니다.");
+
         let current = new Date(startDate);
 
         while (current <= endDate) {
+          // 날짜를 고유 키(YYYY-MM-DD)로 사용해 기록 보존
+          let keyDate = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, "0")}-${String(current.getDate()).padStart(2, "0")}`;
           let daysLeft = Math.round(
             (endDate - current) / (1000 * 60 * 60 * 24),
           );
+
+          // 저장된 기록이 있으면 불러오고, 없으면 기본값
+          let record = savedRecords[keyDate] || {
+            status: "none",
+            actualIntake: null,
+            actualExercise: null,
+            actualWeight: null,
+          };
+
           scheduleData.push({
-            dateStr: `${current.getMonth() + 1}월 ${current.getDate()}일`,
+            key: keyDate,
+            dateStr: `${current.getMonth() + 1}/${current.getDate()}`,
             daysLeft: `D-${daysLeft}`,
             plannedIntake: plannedIntake,
             plannedExercise: plannedExercise,
-            status: "none", // 'none', 'success', 'fail'
-            actualIntake: null,
-            actualExercise: null,
+            status: record.status,
+            actualIntake: record.actualIntake,
+            actualExercise: record.actualExercise,
+            actualWeight: record.actualWeight,
           });
           current.setDate(current.getDate() + 1);
         }
 
         renderTable();
+        saveToLocalStorage(); // 설정 정보가 바뀌었을 수 있으니 저장
       }
 
-      // 초기 테이블 뼈대 그리기
       function renderTable() {
         const tbody = document.getElementById("schedule-body");
         tbody.innerHTML = "";
 
         scheduleData.forEach((day, index) => {
           const tr = document.createElement("tr");
+
+          let statusSelect = `
+                <select class="status-select" onchange="updateStatus(${index}, this.value)">
+                    <option value="none" ${day.status === "none" ? "selected" : ""}>➖ 대기중</option>
+                    <option value="success" ${day.status === "success" ? "selected" : ""}>✅ 지킴</option>
+                    <option value="fail" ${day.status === "fail" ? "selected" : ""}>❌ 수정</option>
+                </select>
+            `;
+
           tr.innerHTML = `
                 <td>${day.dateStr}</td>
-                <td>${day.daysLeft}</td>
-                <td class="goal-text">${day.plannedIntake.toLocaleString()} kcal</td>
-                <td class="exercise-text">+ ${day.plannedExercise} kcal</td>
-                <td>
-                    <select class="status-select" onchange="updateStatus(${index}, this.value)">
-                        <option value="none">➖ 대기중</option>
-                        <option value="success">✅ 지킴</option>
-                        <option value="fail">❌ 못 지킴(수정)</option>
-                    </select>
-                </td>
+                <td style="color:#aaa; font-size:0.9em;">${day.daysLeft}</td>
+                <td class="goal-text">${day.plannedIntake}</td>
+                <td style="color:#7f8c8d;">+${day.plannedExercise}</td>
+                <td>${statusSelect}</td>
                 <td id="td-intake-${index}"></td>
                 <td id="td-exercise-${index}"></td>
                 <td id="margin-${index}">-</td>
                 <td id="weight-${index}" style="font-weight:bold; color:#2c3e50;">-</td>
+                <td style="background-color: #f4fbff;">
+                    <input type="number" step="0.1" class="table-input weight-input" placeholder="기록" value="${day.actualWeight || ""}" oninput="updateWeight(${index}, this.value)">
+                </td>
+                <td id="error-${index}">-</td>
             `;
           tbody.appendChild(tr);
           updateRowUI(index);
@@ -362,14 +455,13 @@
         calculateProjections();
       }
 
-      // 상태 변경 (지킴/못지킴) 시 해당 행의 UI만 변경
       function updateStatus(index, val) {
         scheduleData[index].status = val;
         updateRowUI(index);
+        syncToSavedRecords(index);
         calculateProjections();
       }
 
-      // 해당 줄의 입력칸을 보여줄지 말지 결정
       function updateRowUI(index) {
         const day = scheduleData[index];
         const tdIntake = document.getElementById(`td-intake-${index}`);
@@ -384,20 +476,37 @@
           tdIntake.innerHTML = `<input type="number" class="table-input" placeholder="${day.plannedIntake}" value="${day.actualIntake || ""}" oninput="updateData(${index}, 'actualIntake', this.value)">`;
           tdExercise.innerHTML = `<input type="number" class="table-input" placeholder="${day.plannedExercise}" value="${day.actualExercise || ""}" oninput="updateData(${index}, 'actualExercise', this.value)">`;
         } else {
-          tdIntake.innerHTML = `<span class="empty-dash">-</span>`;
-          tdExercise.innerHTML = `<span class="empty-dash">-</span>`;
+          tdIntake.innerHTML = `<span style="color:#ccc;">-</span>`;
+          tdExercise.innerHTML = `<span style="color:#ccc;">-</span>`;
           day.actualIntake = null;
           day.actualExercise = null;
         }
       }
 
-      // 사용자가 실패 창에 숫자를 적을 때 배열 데이터 업데이트
       function updateData(index, field, value) {
         scheduleData[index][field] = value;
+        syncToSavedRecords(index);
         calculateProjections();
       }
 
-      // 핵심: 도미노 체중 계산 로직
+      function updateWeight(index, value) {
+        scheduleData[index].actualWeight = value;
+        syncToSavedRecords(index);
+        calculateProjections();
+      }
+
+      // 배열 데이터를 객체(로컬스토리지용)에 동기화
+      function syncToSavedRecords(index) {
+        let day = scheduleData[index];
+        savedRecords[day.key] = {
+          status: day.status,
+          actualIntake: day.actualIntake,
+          actualExercise: day.actualExercise,
+          actualWeight: day.actualWeight,
+        };
+        saveToLocalStorage();
+      }
+
       function calculateProjections() {
         let currentW = startWeight;
 
@@ -417,9 +526,6 @@
               day.actualExercise !== null && day.actualExercise !== ""
                 ? parseInt(day.actualExercise)
                 : day.plannedExercise;
-          } else {
-            intake = day.plannedIntake;
-            exercise = day.plannedExercise;
           }
 
           let totalBurn = baseTDEE + exercise;
@@ -427,21 +533,34 @@
           let weightChange = dailyMargin / 7700;
           currentW -= weightChange;
 
-          // 해당 줄 데이터 화면에 뿌려주기
+          // 마진 출력
           const marginTd = document.getElementById(`margin-${index}`);
-          if (dailyMargin > 0) {
-            marginTd.innerHTML = `<span class="deficit-positive">-${dailyMargin} kcal</span>`;
-          } else if (dailyMargin < 0) {
-            marginTd.innerHTML = `<span class="deficit-negative">+${Math.abs(dailyMargin)} kcal</span>`;
-          } else {
-            marginTd.innerText = "0 kcal";
-          }
+          if (dailyMargin > 0)
+            marginTd.innerHTML = `<span class="deficit-positive">-${dailyMargin}</span>`;
+          else if (dailyMargin < 0)
+            marginTd.innerHTML = `<span class="deficit-negative">+${Math.abs(dailyMargin)}</span>`;
+          else marginTd.innerText = "0";
 
+          // 예상 체중 출력
           document.getElementById(`weight-${index}`).innerText =
-            currentW.toFixed(2) + " kg";
+            currentW.toFixed(2);
+
+          // 오차 계산 로직 (실제 체중 - 예상 체중)
+          const errorTd = document.getElementById(`error-${index}`);
+          if (day.actualWeight !== null && day.actualWeight !== "") {
+            let actual = parseFloat(day.actualWeight);
+            let diff = actual - currentW;
+
+            if (diff > 0) {
+              errorTd.innerHTML = `<span class="error-bad">+${diff.toFixed(2)}kg</span>`; // 예상보다 덜 빠짐
+            } else {
+              errorTd.innerHTML = `<span class="error-good">${diff.toFixed(2)}kg</span>`; // 예상보다 더 빠짐!
+            }
+          } else {
+            errorTd.innerText = "-";
+          }
         });
 
-        // 대시보드 상단 요약에 최종 몸무게 업데이트
         document.getElementById("res-final-weight").innerText =
           currentW.toFixed(2) + " kg";
       }
