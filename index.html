@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>관리 대시보드</title>
+    <title>다이내믹 체중 관리 대시보드 PRO</title>
     <style>
       body {
         font-family: "Pretendard", "Malgun Gothic", sans-serif;
@@ -13,7 +13,7 @@
         padding: 20px;
       }
       .container {
-        max-width: 1200px; /* 테이블이 넓어져서 폭을 조금 더 키웠습니다 */
+        max-width: 1200px;
         margin: 0 auto;
       }
       h1,
@@ -88,6 +88,9 @@
         padding: 20px;
         border-radius: 10px;
         text-align: center;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
       }
       .result-box.highlight {
         background: #e8f5e9;
@@ -107,6 +110,12 @@
       .result-box.highlight p {
         color: #27ae60;
         font-size: 1.8em;
+      }
+      .warning-text {
+        color: #e74c3c;
+        font-size: 0.8em;
+        margin-top: 5px;
+        font-weight: bold;
       }
 
       /* 테이블 스타일링 */
@@ -160,7 +169,7 @@
         font-weight: bold;
       }
       .weight-input {
-        background-color: #e8f4f8; /* 몸무게 입력칸은 파란색 톤으로 구분 */
+        background-color: #e8f4f8;
       }
       .table-input:focus {
         background-color: #fff;
@@ -181,16 +190,16 @@
       .error-good {
         color: #3498db;
         font-weight: bold;
-      } /* 예상보다 더 빠짐 */
+      }
       .error-bad {
         color: #e74c3c;
         font-weight: bold;
-      } /* 예상보다 덜 빠짐 */
+      }
     </style>
   </head>
   <body>
     <div class="container">
-      <h1>📈 다이내믹 체중 관리 PRO</h1>
+      <h1>📈 관리 대시보드</h1>
 
       <div class="card">
         <h2>설정 및 정보</h2>
@@ -225,9 +234,17 @@
               <option value="1.725">적극적 활동 (매일)</option>
             </select>
           </div>
+        </div>
+        <div
+          class="input-group"
+          style="background-color: #f1f8f5; padding: 15px; border-radius: 8px">
           <div class="input-item">
-            <label>🎯 목표 날짜 (자유 변경)</label>
+            <label>🎯 목표 날짜</label>
             <input type="date" id="target-date" value="2026-05-30" />
+          </div>
+          <div class="input-item">
+            <label>🎯 목표 체중 (kg)</label>
+            <input type="number" id="target-weight" value="65" step="0.1" />
           </div>
         </div>
         <button class="primary-btn" onclick="generateSchedule()">
@@ -239,15 +256,19 @@
       </div>
 
       <div class="card" id="result-card" style="display: none">
-        <h2>📊 데이터 요약</h2>
+        <h2>📊 데이터 요약 (역산 결과)</h2>
         <div class="result-grid">
           <div class="result-box">
             <h3>유지 칼로리 (TDEE)</h3>
             <p id="res-tdee">-</p>
+            <div style="font-size: 0.8em; color: #666; margin-top: 5px">
+              기초대사량: <span id="res-bmr"></span>kcal
+            </div>
           </div>
-          <div class="result-box">
+          <div class="result-box" id="intake-box">
             <h3>하루 목표 섭취량</h3>
             <p id="res-target">-</p>
+            <div id="res-warning" class="warning-text"></div>
           </div>
           <div class="result-box highlight">
             <h3>🔥 목표일 예상 체중</h3>
@@ -265,8 +286,8 @@
             font-size: 0.9em;
             margin-bottom: 20px;
           ">
-          ※ 목표 날짜를 바꿔도 기존에 입력한 데이터는 날아가지 않습니다. 자동
-          저장됩니다!
+          ※ 목표 체중/날짜를 바꾸면 그에 맞춰 남은 기간의 하루 섭취 계획이
+          실시간으로 재계산됩니다!
         </p>
         <div class="table-container">
           <table>
@@ -295,18 +316,16 @@
       let scheduleData = [];
       let startWeight = 0;
       let baseTDEE = 0;
-      let savedRecords = {}; // 로컬스토리지 저장용 객체
+      let savedRecords = {};
 
-      // 페이지 로드 시 기존 데이터 불러오기
       window.onload = function () {
         loadFromLocalStorage();
       };
 
       function loadFromLocalStorage() {
-        const data = localStorage.getItem("dietProData");
+        const data = localStorage.getItem("dietProData_v2");
         if (data) {
           const parsed = JSON.parse(data);
-          // 기본 정보 세팅
           if (parsed.info) {
             document.getElementById("height").value = parsed.info.height;
             document.getElementById("weight").value = parsed.info.weight;
@@ -315,10 +334,10 @@
             document.getElementById("activity").value = parsed.info.activity;
             document.getElementById("target-date").value =
               parsed.info.targetDate;
+            document.getElementById("target-weight").value =
+              parsed.info.targetWeight || "";
           }
-          // 날짜별 기록 세팅
           savedRecords = parsed.records || {};
-          // 자동으로 표 생성
           generateSchedule();
         }
       }
@@ -331,17 +350,15 @@
           gender: document.getElementById("gender").value,
           activity: document.getElementById("activity").value,
           targetDate: document.getElementById("target-date").value,
+          targetWeight: document.getElementById("target-weight").value,
         };
-        const dataToSave = {
-          info: info,
-          records: savedRecords,
-        };
-        localStorage.setItem("dietProData", JSON.stringify(dataToSave));
+        const dataToSave = { info: info, records: savedRecords };
+        localStorage.setItem("dietProData_v2", JSON.stringify(dataToSave));
       }
 
       function clearData() {
         if (confirm("정말 모든 기록을 삭제하시겠습니까? 복구할 수 없습니다.")) {
-          localStorage.removeItem("dietProData");
+          localStorage.removeItem("dietProData_v2");
           location.reload();
         }
       }
@@ -353,11 +370,14 @@
         const gender = document.getElementById("gender").value;
         const activity = parseFloat(document.getElementById("activity").value);
         const targetDateStr = document.getElementById("target-date").value;
+        const targetWeight = parseFloat(
+          document.getElementById("target-weight").value,
+        );
 
-        if (!h || !startWeight || !a || !targetDateStr)
+        if (!h || !startWeight || !a || !targetDateStr || !targetWeight)
           return alert("모든 값을 정확히 입력하세요.");
 
-        // 기초/활동 대사량
+        // 기초/활동 대사량 계산
         let bmr =
           gender === "male"
             ? 10 * startWeight + 6.25 * h - 5 * a + 5
@@ -365,12 +385,44 @@
         bmr = Math.round(bmr);
         baseTDEE = Math.round(bmr * activity);
 
-        let plannedIntake = baseTDEE - 600;
-        if (plannedIntake < bmr) plannedIntake = bmr;
+        // 기간 계산 (고정 시작일: 3월 9일)
+        const startDate = new Date(2026, 2, 9);
+        const endDate = new Date(targetDateStr);
+        let totalDays = Math.round(
+          (endDate - startDate) / (1000 * 60 * 60 * 24),
+        );
+
+        if (totalDays <= 0)
+          return alert("목표 날짜는 시작일(3월 9일) 이후여야 합니다.");
+
+        // 핵심: 칼로리 역산 로직
+        // 1. 빼야 할 총 몸무게 = 시작 몸무게 - 목표 체중
+        let weightToLose = startWeight - targetWeight;
+        // 2. 태워야 할 총 칼로리 = 지방 1kg당 7700kcal
+        let totalCalorieDeficit = weightToLose * 7700;
+        // 3. 하루에 내야 하는 적자(마진) 칼로리
+        let requiredDailyDeficit = Math.round(totalCalorieDeficit / totalDays);
+
+        // 4. 권장 추가 운동량 300kcal 고정 가정
         let plannedExercise = 300;
+
+        // 5. 역산된 목표 섭취량 = (유지칼로리 + 추가운동) - 하루필요적자
+        let plannedIntake = baseTDEE + plannedExercise - requiredDailyDeficit;
+
+        // 경고 로직 (건강 체크)
+        const warningEl = document.getElementById("res-warning");
+        if (plannedIntake < bmr && plannedIntake > 0) {
+          warningEl.innerText = `⚠️ 주의: 기초대사량(${bmr}kcal)보다 적습니다. 목표를 길게 잡거나 목표 체중을 올리세요!`;
+        } else if (plannedIntake <= 0) {
+          warningEl.innerText = `🚨 불가능: 기간 내 달성하려면 굶어도 모자랍니다. 일정을 수정하세요!`;
+        } else {
+          warningEl.innerText = `✅ 건강하게 감량 가능한 페이스입니다.`;
+          warningEl.style.color = `#27ae60`;
+        }
 
         document.getElementById("res-tdee").innerText =
           baseTDEE.toLocaleString() + " kcal";
+        document.getElementById("res-bmr").innerText = bmr.toLocaleString();
         document.getElementById("res-target").innerText =
           plannedIntake.toLocaleString() + " kcal";
 
@@ -378,22 +430,14 @@
         document.getElementById("schedule-card").style.display = "block";
 
         scheduleData = [];
-        const startDate = new Date(2026, 2, 9); // 고정 시작일: 3월 9일
-        const endDate = new Date(targetDateStr);
-
-        if (endDate < startDate)
-          return alert("목표 날짜는 시작일(3월 9일) 이후여야 합니다.");
-
         let current = new Date(startDate);
 
         while (current <= endDate) {
-          // 날짜를 고유 키(YYYY-MM-DD)로 사용해 기록 보존
           let keyDate = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, "0")}-${String(current.getDate()).padStart(2, "0")}`;
           let daysLeft = Math.round(
             (endDate - current) / (1000 * 60 * 60 * 24),
           );
 
-          // 저장된 기록이 있으면 불러오고, 없으면 기본값
           let record = savedRecords[keyDate] || {
             status: "none",
             actualIntake: null,
@@ -405,7 +449,7 @@
             key: keyDate,
             dateStr: `${current.getMonth() + 1}/${current.getDate()}`,
             daysLeft: `D-${daysLeft}`,
-            plannedIntake: plannedIntake,
+            plannedIntake: plannedIntake, // 역산된 섭취량 적용
             plannedExercise: plannedExercise,
             status: record.status,
             actualIntake: record.actualIntake,
@@ -416,7 +460,7 @@
         }
 
         renderTable();
-        saveToLocalStorage(); // 설정 정보가 바뀌었을 수 있으니 저장
+        saveToLocalStorage();
       }
 
       function renderTable() {
@@ -495,7 +539,6 @@
         calculateProjections();
       }
 
-      // 배열 데이터를 객체(로컬스토리지용)에 동기화
       function syncToSavedRecords(index) {
         let day = scheduleData[index];
         savedRecords[day.key] = {
@@ -533,7 +576,6 @@
           let weightChange = dailyMargin / 7700;
           currentW -= weightChange;
 
-          // 마진 출력
           const marginTd = document.getElementById(`margin-${index}`);
           if (dailyMargin > 0)
             marginTd.innerHTML = `<span class="deficit-positive">-${dailyMargin}</span>`;
@@ -541,20 +583,18 @@
             marginTd.innerHTML = `<span class="deficit-negative">+${Math.abs(dailyMargin)}</span>`;
           else marginTd.innerText = "0";
 
-          // 예상 체중 출력
           document.getElementById(`weight-${index}`).innerText =
             currentW.toFixed(2);
 
-          // 오차 계산 로직 (실제 체중 - 예상 체중)
           const errorTd = document.getElementById(`error-${index}`);
           if (day.actualWeight !== null && day.actualWeight !== "") {
             let actual = parseFloat(day.actualWeight);
             let diff = actual - currentW;
 
             if (diff > 0) {
-              errorTd.innerHTML = `<span class="error-bad">+${diff.toFixed(2)}kg</span>`; // 예상보다 덜 빠짐
+              errorTd.innerHTML = `<span class="error-bad">+${diff.toFixed(2)}kg</span>`;
             } else {
-              errorTd.innerHTML = `<span class="error-good">${diff.toFixed(2)}kg</span>`; // 예상보다 더 빠짐!
+              errorTd.innerHTML = `<span class="error-good">${diff.toFixed(2)}kg</span>`;
             }
           } else {
             errorTd.innerText = "-";
